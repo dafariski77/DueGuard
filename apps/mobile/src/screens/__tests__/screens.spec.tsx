@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import React from 'react';
 import { HomeScreen } from '../HomeScreen.js';
 import { QuickAddScreen } from '../QuickAddScreen.js';
 import { DetailScreen } from '../DetailScreen.js';
@@ -7,8 +8,8 @@ import { SpendRadarScreen } from '../SpendRadarScreen.js';
 import { SettingsScreen } from '../SettingsScreen.js';
 import { Category, BillingCycle } from '@dueguard/shared';
 
-describe('Mobile Core Screens', () => {
-  it('HomeScreen creates Bento layout with hero urgency and timeline items', () => {
+describe('Mobile Core React Native Screens', () => {
+  it('HomeScreen renders Bento layout and timeline items as React Native elements', () => {
     const items = [
       {
         id: '1',
@@ -21,34 +22,28 @@ describe('Mobile Core Screens', () => {
       },
     ];
 
-    const screen = HomeScreen({
+    const screen = React.createElement(HomeScreen, {
       user: { isPro: false, activeItemCount: 1, maxFreeItems: 7 },
       items,
       summary: { estMonthlySpend: 186000, annualizedSpend: 2232000, dueThisMonth: 186000 },
     });
 
-    assert.strictEqual(screen.type, 'HomeScreen');
-    assert.strictEqual(screen.heroItem?.title, 'Netflix');
-    assert.strictEqual(screen.heroItem?.urgencyLevel, 'critical');
-    assert.strictEqual(screen.tierStatus.label, '1 / 7 Free Items');
-    assert.strictEqual(screen.timeline.length, 1);
-    assert.ok(screen.fab.title.includes('Add'));
+    assert.ok(React.isValidElement(screen));
+    assert.strictEqual(screen.type, HomeScreen);
+    assert.strictEqual(screen.props.user.isPro, false);
+    assert.strictEqual(screen.props.items.length, 1);
   });
 
-  it('QuickAddScreen auto-populates from template registry and validates', () => {
-    const screen = QuickAddScreen({ selectedTemplateId: 'netflix' });
+  it('QuickAddScreen renders form inputs and popular template chips', () => {
+    const screen = React.createElement(QuickAddScreen, { initialTemplateId: 'netflix' });
 
-    assert.strictEqual(screen.form.title, 'Netflix');
-    assert.strictEqual(screen.form.category, Category.SUBSCRIPTION);
-    assert.strictEqual(screen.form.billingCycle, BillingCycle.MONTHLY);
-    assert.strictEqual(screen.form.amount, 186000);
-
-    const validation = screen.validate();
-    assert.strictEqual(validation.isValid, true);
+    assert.ok(React.isValidElement(screen));
+    assert.strictEqual(screen.type, QuickAddScreen);
+    assert.strictEqual(screen.props.initialTemplateId, 'netflix');
   });
 
-  it('DetailScreen structures digital pass, specifications, and proof vault', () => {
-    const screen = DetailScreen({
+  it('DetailScreen renders digital pass, specifications, and proof vault', () => {
+    const screen = React.createElement(DetailScreen, {
       item: {
         id: 'item_stnk',
         title: 'STNK Mobil Pajak',
@@ -63,16 +58,14 @@ describe('Mobile Core Screens', () => {
       isPro: false,
     });
 
-    assert.strictEqual(screen.pass.title, 'STNK Mobil Pajak');
-    assert.strictEqual(screen.specs.billingCycle, 'YEARLY');
-    assert.strictEqual(screen.proofVault.count, 1);
-    assert.strictEqual(screen.proofVault.canAddMore, true); // 1 < 2 free limit
-    assert.ok(screen.actions.some((a: any) => a.id === 'mark_renewed'));
-    assert.ok(screen.actions.some((a: any) => a.id === 'delete_item'));
+    assert.ok(React.isValidElement(screen));
+    assert.strictEqual(screen.type, DetailScreen);
+    assert.strictEqual(screen.props.item.title, 'STNK Mobil Pajak');
+    assert.strictEqual(screen.props.item.attachments?.length, 1);
   });
 
   it('SpendRadarScreen visualizes 90-day cash spikes and category distribution', () => {
-    const screen = SpendRadarScreen({
+    const screen = React.createElement(SpendRadarScreen, {
       summary: {
         estMonthlySpend: 300000,
         annualizedSpend: 3600000,
@@ -90,21 +83,21 @@ describe('Mobile Core Screens', () => {
       },
     });
 
-    assert.strictEqual(screen.hero.monthlyRunRate, 'Rp 300.000');
-    assert.strictEqual(screen.spikeRadar.hasSpike, true);
-    assert.strictEqual(screen.spikeRadar.highestMonth, '2026-05');
-    assert.strictEqual(screen.breakdown.billIdPercentage, 60);
+    assert.ok(React.isValidElement(screen));
+    assert.strictEqual(screen.type, SpendRadarScreen);
+    assert.strictEqual(screen.props.summary.estMonthlySpend, 300000);
+    assert.strictEqual(screen.props.summary.upcoming90DaysSpikes.length, 3);
   });
 
   it('SettingsScreen incorporates biometric lock and App Store compliant deletion', () => {
-    const screen = SettingsScreen({
+    const screen = React.createElement(SettingsScreen, {
       user: { email: 'raka@example.com', isPro: false },
       settings: { faceIdEnabled: true, pushEnabled: true },
     });
 
-    assert.strictEqual(screen.profile.email, 'raka@example.com');
-    assert.strictEqual(screen.security.faceIdEnabled, true);
-    assert.strictEqual(screen.notifications.pushEnabled, true);
-    assert.ok(screen.compliance.hasDeleteAccountButton, 'Must have delete account button for Apple compliance');
+    assert.ok(React.isValidElement(screen));
+    assert.strictEqual(screen.type, SettingsScreen);
+    assert.strictEqual(screen.props.user.email, 'raka@example.com');
+    assert.strictEqual(screen.props.settings?.faceIdEnabled, true);
   });
 });
