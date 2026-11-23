@@ -1,5 +1,8 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { TierPolicyService } from '../common/tier-policy.service.js';
+import { IStorageService } from './storage.interface.js';
+import { MockStorageService } from './mock-storage.service.js';
 
 export interface PresignUploadDto {
   fileName: string;
@@ -16,12 +19,11 @@ export interface ConfirmUploadDto {
 
 @Injectable()
 export class AttachmentsService {
-  private readonly storageEndpoint: string;
-
-  constructor(private readonly prisma: PrismaService) {
-    this.storageEndpoint =
-      process.env.STORAGE_ENDPOINT || 'https://r2.dueguard.internal/vault';
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tierPolicy: TierPolicyService = new TierPolicyService(),
+    private readonly storageService: IStorageService = new MockStorageService()
+  ) {}
 
   private async assertItemOwnership(userId: string, itemId: string) {
     const item = await this.prisma.trackedItem.findFirst({
@@ -43,26 +45,12 @@ export class AttachmentsService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const isPro = user?.isPro ?? false;
 
-    if (!isPro) {
-      const existingCount = await this.prisma.attachment.count({
-        where: { itemId },
-      });
-      if (existingCount >= 2) {
-        throw new ForbiddenException(
-          'Free tier limit reached (max 2 attachments per item). Upgrade to Pro for unlimited attachments.'
-        );
-      }
-    }
+    const existingCount = await this.prisma.attachment.count({
+      where: { itemId },
+    });
+    this.tierPolicy.assertCanAddAttachment(existingCount, isPro);
 
-    const safeName = dto.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storageKey = `vault/${userId}/${itemId}/${Date.now()}-${safeName}`;
-    const uploadUrl = `${this.storageEndpoint}/${storageKey}?X-Amz-Signature=mock-sig&expires=300`;
-
-    return {
-      uploadUrl,
-      storageKey,
-      expiresInSeconds: 300,
-    };
+    return this.storageService.getPresignedUploadUrl(userId, itemId, dto.fileName);
   }
 
   async confirmUpload(
@@ -95,13 +83,7 @@ export class AttachmentsService {
       throw new NotFoundException(`Attachment ${attachmentId} not found`);
     }
 
-    const viewUrl = `${this.storageEndpoint}/${attachment.storageKey}?X-Amz-Signature=mock-view-sig&expires=300`;
-
-    return {
-      viewUrl,
-      mimeType: attachment.mimeType,
-      expiresInSeconds: 300,
-    };
+    return this.storageService.getPresignedViewUrl(attachment.storageKey, attachment.mimeType);
   }
 
   async delete(userId: string, itemId: string, attachmentId: string) {
@@ -113,6 +95,8 @@ export class AttachmentsService {
     if (!attachment) {
       throw new NotFoundException(`Attachment ${attachmentId} not found`);
     }
+
+    await this.storageService.deleteObject(attachment.storageKey);
 
     return this.prisma.attachment.delete({
       where: { id: attachmentId },

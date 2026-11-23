@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   BillingCycle,
@@ -7,25 +7,24 @@ import {
   CreateTrackedItemDto,
   UpdateTrackedItemDto,
 } from '../common/index.js';
+import { TierPolicyService } from '../common/tier-policy.service.js';
+import { RenewalCalculator } from './renewal-calculator.js';
 
 @Injectable()
 export class ItemsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tierPolicy: TierPolicyService = new TierPolicyService()
+  ) {}
 
   async create(userId: string, dto: CreateTrackedItemDto) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const isPro = user?.isPro ?? false;
 
-    if (!isPro) {
-      const activeCount = await this.prisma.trackedItem.count({
-        where: { userId, status: ItemStatus.ACTIVE },
-      });
-      if (activeCount >= 7) {
-        throw new ForbiddenException(
-          'Free tier limit reached (max 7 active items). Upgrade to Pro for unlimited items.'
-        );
-      }
-    }
+    const activeCount = await this.prisma.trackedItem.count({
+      where: { userId, status: ItemStatus.ACTIVE },
+    });
+    this.tierPolicy.assertCanCreateItem(activeCount, isPro);
 
     return this.prisma.trackedItem.create({
       data: {
@@ -106,15 +105,10 @@ export class ItemsService {
     }
 
     const currentDue = new Date(item.nextDueDate);
-    const nextDue = new Date(currentDue);
-
-    if (item.billingCycle === BillingCycle.MONTHLY) {
-      nextDue.setMonth(nextDue.getMonth() + 1);
-    } else if (item.billingCycle === BillingCycle.QUARTERLY) {
-      nextDue.setMonth(nextDue.getMonth() + 3);
-    } else if (item.billingCycle === BillingCycle.YEARLY) {
-      nextDue.setFullYear(nextDue.getFullYear() + 1);
-    }
+    const nextDue = RenewalCalculator.calculateNextDueDate(
+      item.billingCycle as BillingCycle,
+      currentDue
+    );
 
     return this.prisma.trackedItem.update({
       where: { id },

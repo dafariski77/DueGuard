@@ -19,7 +19,7 @@ export class AuthController {
   }
 
   @Post('social')
-  async socialLogin(@Body() body: { provider: 'google' | 'apple'; email: string }) {
-    return this.authService.verifySocialToken(body.provider, body.email);
+  async socialLogin(@Body() body: { provider: 'google' | 'apple'; idToken: string }) {
+    return this.authService.verifySocialToken(body.provider, body.idToken);
   }
 }

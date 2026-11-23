@@ -2,6 +2,8 @@ import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/co
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ISocialAuthVerifier } from './social-verifier.interface.js';
+import { SocialAuthVerifierService } from './social-verifier.service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dueguard_default_dev_secret_key_change_in_prod';
 const JWT_EXPIRES_IN = '30d';
@@ -14,7 +16,10 @@ export interface JwtPayload {
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly socialVerifier: ISocialAuthVerifier = new SocialAuthVerifierService()
+  ) {}
 
   async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, 10);
@@ -90,12 +95,14 @@ export class AuthService {
     };
   }
 
-  async verifySocialToken(provider: 'google' | 'apple', email: string) {
-    let user = await this.prisma.user.findUnique({ where: { email } });
+  async verifySocialToken(provider: 'google' | 'apple', idToken: string) {
+    const verified = await this.socialVerifier.verifyToken(provider, idToken);
+
+    let user = await this.prisma.user.findUnique({ where: { email: verified.email } });
     if (!user) {
       user = await this.prisma.user.create({
         data: {
-          email,
+          email: verified.email,
           authProvider: provider,
         },
       });

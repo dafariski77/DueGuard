@@ -1,6 +1,8 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ItemStatus } from '../common/index.js';
+import { TierPolicyService } from '../common/tier-policy.service.js';
+import { NotificationFormatter } from './notification-formatter.js';
 
 export interface PushClient {
   send(message: {
@@ -19,7 +21,8 @@ export class NotificationsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() pushClient?: PushClient
+    @Optional() pushClient?: PushClient,
+    private readonly tierPolicy: TierPolicyService = new TierPolicyService()
   ) {
     this.pushClient = pushClient || {
       send: async (msg) => {
@@ -67,7 +70,7 @@ export class NotificationsService {
       const stages = item.reminderDaysBefore || [7, 1];
       if (!stages.includes(diffDays)) continue;
 
-      if (!item.user.isPro && diffDays > 3) {
+      if (!this.tierPolicy.isNotificationStageAllowed(diffDays, item.user.isPro)) {
         continue;
       }
 
@@ -84,13 +87,8 @@ export class NotificationsService {
         continue;
       }
 
-      const urgencyPrefix = diffDays <= 3 ? '⚠️ ' : '📅 ';
-      const dayLabel = diffDays === 1 ? '1 day' : `${diffDays} days`;
-      const title = `${urgencyPrefix}Due in ${dayLabel}: ${item.title}`;
-      const amountStr = item.amount
-        ? `Rp ${Number(item.amount).toLocaleString('id-ID')}`
-        : 'Rp 0';
-      const body = `Payment of ${amountStr} is scheduled. Tap to review or mark as paid.`;
+      const title = NotificationFormatter.formatTitle(item.title, diffDays);
+      const body = NotificationFormatter.formatBody(item.amount != null ? Number(item.amount) : null);
 
       try {
         await this.pushClient.send({
