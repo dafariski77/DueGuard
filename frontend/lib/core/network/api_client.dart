@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'api_client_interface.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -11,7 +12,7 @@ class ApiException implements Exception {
   String toString() => 'ApiException($statusCode): $message';
 }
 
-class ApiClient {
+class ApiClient implements IApiClient {
   final String baseUrl;
   final http.Client client;
   String? authToken;
@@ -40,12 +41,14 @@ class ApiClient {
     );
   }
 
+  @override
   Future<dynamic> get(String path, {Map<String, dynamic>? queryParameters}) async {
     final uri = _buildUri(path, queryParameters);
     final response = await client.get(uri, headers: _buildHeaders());
     return _handleResponse(response);
   }
 
+  @override
   Future<dynamic> post(String path, {dynamic body}) async {
     final uri = _buildUri(path);
     final response = await client.post(
@@ -56,6 +59,7 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  @override
   Future<dynamic> patch(String path, {dynamic body}) async {
     final uri = _buildUri(path);
     final response = await client.patch(
@@ -66,6 +70,7 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  @override
   Future<dynamic> delete(String path) async {
     final uri = _buildUri(path);
     final response = await client.delete(uri, headers: _buildHeaders());

@@ -59,8 +59,10 @@ class TrackedItem {
     this.attachments = const [],
   });
 
-  int get daysRemaining {
-    final now = DateTime.now();
+  int get daysRemaining => calculateDaysRemaining();
+
+  int calculateDaysRemaining([DateTime? clock]) {
+    final now = clock ?? DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final due = DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day);
     return due.difference(today).inDays;

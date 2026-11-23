@@ -109,6 +109,10 @@ class DueTheme {
     return 'Rp $formattedNumber';
   }
 
+  static String formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
   static ThemeData get lightTheme {
     return ThemeData(
       brightness: Brightness.light,

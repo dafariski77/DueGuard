@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'core/network/api_client.dart';
 import 'core/theme/due_theme.dart';
-import 'data/models/enums.dart';
 import 'data/models/tracked_item.dart';
-import 'data/models/analytics_summary.dart';
+import 'data/repositories/items_repository.dart';
+import 'data/repositories/analytics_repository.dart';
 import 'presentation/screens/home_screen.dart';
 import 'presentation/screens/quick_add_screen.dart';
 import 'presentation/screens/detail_screen.dart';
@@ -11,13 +12,24 @@ import 'presentation/screens/settings_screen.dart';
 import 'presentation/modals/paywall_modal.dart';
 import 'presentation/modals/renewal_affirmation_sheet.dart';
 import 'presentation/modals/delete_consent_dialog.dart';
+import 'presentation/viewmodels/items_view_model.dart';
 
 void main() {
-  runApp(const DueGuardApp());
+  final apiClient = ApiClient(baseUrl: 'http://localhost:3000');
+  final itemsRepo = ItemsRepository(apiClient);
+  final analyticsRepo = AnalyticsRepository(apiClient);
+  final viewModel = ItemsViewModel(
+    itemsRepository: itemsRepo,
+    analyticsRepository: analyticsRepo,
+  );
+
+  runApp(DueGuardApp(viewModel: viewModel));
 }
 
 class DueGuardApp extends StatelessWidget {
-  const DueGuardApp({super.key});
+  final ItemsViewModel? viewModel;
+
+  const DueGuardApp({super.key, this.viewModel});
 
   @override
   Widget build(BuildContext context) {
@@ -27,13 +39,15 @@ class DueGuardApp extends StatelessWidget {
       theme: DueTheme.lightTheme,
       darkTheme: DueTheme.darkTheme,
       themeMode: ThemeMode.system,
-      home: const RootNavigationContainer(),
+      home: RootNavigationContainer(viewModel: viewModel),
     );
   }
 }
 
 class RootNavigationContainer extends StatefulWidget {
-  const RootNavigationContainer({super.key});
+  final ItemsViewModel? viewModel;
+
+  const RootNavigationContainer({super.key, this.viewModel});
 
   @override
   State<RootNavigationContainer> createState() => _RootNavigationContainerState();
@@ -41,113 +55,22 @@ class RootNavigationContainer extends StatefulWidget {
 
 class _RootNavigationContainerState extends State<RootNavigationContainer> {
   int _currentIndex = 0;
-  bool _isPro = false;
-
-  late List<TrackedItem> _items;
+  late final ItemsViewModel _viewModel;
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _items = [
-      TrackedItem(
-        id: 'item-1',
-        title: 'Netflix Premium',
-        category: Category.subscription,
-        amount: 186000,
-        billingCycle: BillingCycle.monthly,
-        nextDueDate: now.add(const Duration(days: 2)),
-        reminderDaysBefore: [7, 3, 1],
-        status: ItemStatus.active,
-        attachments: const [
-          AttachmentItem(
-            id: 'att-1',
-            fileName: 'netflix_invoice_march.pdf',
-            viewUrl: 'https://storage.dueguard.com/invoice.pdf',
-            mimeType: 'application/pdf',
-          ),
-        ],
-      ),
-      TrackedItem(
-        id: 'item-2',
-        title: 'Spotify Family',
-        category: Category.subscription,
-        amount: 86900,
-        billingCycle: BillingCycle.monthly,
-        nextDueDate: now.add(const Duration(days: 9)),
-        reminderDaysBefore: [7, 3, 1],
-        status: ItemStatus.active,
-      ),
-      TrackedItem(
-        id: 'item-3',
-        title: 'STNK 5-Year Renewal',
-        category: Category.billId,
-        amount: 3500000,
-        billingCycle: BillingCycle.yearly,
-        nextDueDate: now.add(const Duration(days: 42)),
-        reminderDaysBefore: [30, 14, 7, 3, 1],
-        status: ItemStatus.active,
-      ),
-      TrackedItem(
-        id: 'item-4',
-        title: 'MacBook Pro Warranty (AppleCare+)',
-        category: Category.warranty,
-        amount: 3899000,
-        billingCycle: BillingCycle.oneTime,
-        nextDueDate: now.add(const Duration(days: 85)),
-        reminderDaysBefore: [30, 14, 7],
-        status: ItemStatus.active,
-      ),
-      TrackedItem(
-        id: 'item-5',
-        title: 'BPJS Kesehatan Mandiri',
-        category: Category.billId,
-        amount: 150000,
-        billingCycle: BillingCycle.monthly,
-        nextDueDate: now.add(const Duration(days: 12)),
-        reminderDaysBefore: [7, 3, 1],
-        status: ItemStatus.active,
-      ),
-    ];
-  }
-
-  AnalyticsSummary get _analytics {
-    double monthly = 0;
-    for (final item in _items) {
-      if (item.amount == null) continue;
-      switch (item.billingCycle) {
-        case BillingCycle.monthly:
-          monthly += item.amount!;
-          break;
-        case BillingCycle.yearly:
-          monthly += item.amount! / 12.0;
-          break;
-        case BillingCycle.quarterly:
-          monthly += item.amount! / 3.0;
-          break;
-        case BillingCycle.oneTime:
-          break;
-      }
+    if (widget.viewModel != null) {
+      _viewModel = widget.viewModel!;
+    } else {
+      final apiClient = ApiClient(baseUrl: 'http://localhost:3000');
+      _viewModel = ItemsViewModel(
+        itemsRepository: ItemsRepository(apiClient),
+        analyticsRepository: AnalyticsRepository(apiClient),
+      );
     }
 
-    return AnalyticsSummary(
-      estMonthlySpend: monthly,
-      annualizedSpend: monthly * 12.0,
-      dueThisMonth: monthly,
-      upcoming90DaysSpikes: [
-        CashSpike(
-          month: 'April 2026',
-          amount: 3500000,
-          diffFromAverage: 3200000,
-          reasons: ['STNK 5-Year Renewal'],
-        ),
-      ],
-      categoryBreakdown: const CategoryBreakdown(
-        subscriptionPercentage: 62,
-        warrantyPercentage: 15,
-        billIdPercentage: 23,
-      ),
-    );
+    _viewModel.initializeDefaultData();
   }
 
   void _openQuickAdd() {
@@ -155,9 +78,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       MaterialPageRoute(
         builder: (ctx) => QuickAddScreen(
           onSave: (newItem) {
-            setState(() {
-              _items.add(newItem);
-            });
+            _viewModel.addItem(newItem);
             Navigator.of(ctx).pop();
           },
           onCancel: () => Navigator.of(ctx).pop(),
@@ -176,9 +97,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
             _renewItem(item);
           },
           onDelete: () {
-            setState(() {
-              _items.removeWhere((i) => i.id == item.id);
-            });
+            _viewModel.deleteItem(item.id);
             Navigator.of(ctx).pop();
           },
         ),
@@ -186,57 +105,19 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     );
   }
 
-  void _renewItem(TrackedItem item) {
-    DateTime nextDate;
-    switch (item.billingCycle) {
-      case BillingCycle.monthly:
-        nextDate = DateTime(item.nextDueDate.year, item.nextDueDate.month + 1, item.nextDueDate.day);
-        break;
-      case BillingCycle.yearly:
-        nextDate = DateTime(item.nextDueDate.year + 1, item.nextDueDate.month, item.nextDueDate.day);
-        break;
-      case BillingCycle.quarterly:
-        nextDate = DateTime(item.nextDueDate.year, item.nextDueDate.month + 3, item.nextDueDate.day);
-        break;
-      case BillingCycle.oneTime:
-        nextDate = item.nextDueDate;
-        break;
-    }
+  Future<void> _renewItem(TrackedItem item) async {
+    final updated = await _viewModel.renewItem(item);
 
-    final oldIndex = _items.indexWhere((i) => i.id == item.id);
-    final updated = TrackedItem(
-      id: item.id,
-      title: item.title,
-      category: item.category,
-      amount: item.amount,
-      billingCycle: item.billingCycle,
-      nextDueDate: nextDate,
-      reminderDaysBefore: item.reminderDaysBefore,
-      notes: item.notes,
-      templateKey: item.templateKey,
-      status: item.status,
-      attachments: item.attachments,
-    );
-
-    setState(() {
-      if (oldIndex != -1) {
-        _items[oldIndex] = updated;
-      }
-    });
-
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => RenewalAffirmationSheet(
         itemTitle: item.title,
-        newDueDate: nextDate,
+        newDueDate: updated.nextDueDate,
         onUndo: () {
-          setState(() {
-            if (oldIndex != -1) {
-              _items[oldIndex] = item;
-            }
-          });
+          _viewModel.rollbackItem(item);
           Navigator.of(sheetCtx).pop();
         },
         onDismiss: () => Navigator.of(sheetCtx).pop(),
@@ -249,7 +130,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       MaterialPageRoute(
         builder: (ctx) => PaywallModal(
           onSubscribe: (plan) {
-            setState(() => _isPro = true);
+            _viewModel.setPro(true);
             Navigator.of(ctx).pop();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Welcome to DueGuard Pro!')),
@@ -273,9 +154,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => DeleteConsentDialog(
         onConfirmDelete: () {
-          setState(() {
-            _items.clear();
-          });
+          _viewModel.clearAll();
           Navigator.of(ctx).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Account data permanently deleted.')),
@@ -290,62 +169,71 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final screens = [
-      HomeScreen(
-        items: _items,
-        analytics: _analytics,
-        activeItemsCount: _items.length,
-        maxFreeItems: 7,
-        onAddItem: _openQuickAdd,
-        onTapItem: _openDetail,
-      ),
-      SpendRadarScreen(
-        analytics: _analytics,
-      ),
-      SettingsScreen(
-        userEmail: 'user@example.com',
-        isPro: _isPro,
-        onUpgradePro: _openPaywall,
-        onRestorePurchases: _openPaywall,
-        onDeleteAccount: _openDeleteConsent,
-      ),
-    ];
+    return ListenableBuilder(
+      listenable: _viewModel,
+      builder: (context, _) {
+        final screens = [
+          HomeScreen(
+            items: _viewModel.items,
+            analytics: _viewModel.analytics,
+            activeItemsCount: _viewModel.activeItemsCount,
+            maxFreeItems: _viewModel.maxFreeItems,
+            onAddItem: _openQuickAdd,
+            onTapItem: _openDetail,
+            onRefresh: () async {
+              await _viewModel.fetchItems();
+              await _viewModel.fetchAnalytics();
+            },
+          ),
+          SpendRadarScreen(
+            analytics: _viewModel.analytics!,
+          ),
+          SettingsScreen(
+            userEmail: 'user@example.com',
+            isPro: _viewModel.isPro,
+            onUpgradePro: _openPaywall,
+            onRestorePurchases: _openPaywall,
+            onDeleteAccount: _openDeleteConsent,
+          ),
+        ];
 
-    return Scaffold(
-      body: screens[_currentIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: isDark ? DueColors.borderSubtleDark : DueColors.borderSubtle,
-              width: 0.5,
+        return Scaffold(
+          body: screens[_currentIndex],
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: isDark ? DueColors.borderSubtleDark : DueColors.borderSubtle,
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) => setState(() => _currentIndex = index),
+              selectedItemColor: isDark ? DueColors.primaryDark : DueColors.primary,
+              unselectedItemColor: isDark ? DueColors.textSecondaryDark : DueColors.textSecondary,
+              backgroundColor: isDark ? DueColors.surfaceDark : DueColors.surface,
+              elevation: 0,
+              type: BottomNavigationBarType.fixed,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.calendar_today_rounded),
+                  label: 'Upcoming',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.radar_rounded),
+                  label: 'Radar',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.settings_outlined),
+                  label: 'Control',
+                ),
+              ],
             ),
           ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          selectedItemColor: isDark ? DueColors.primaryDark : DueColors.primary,
-          unselectedItemColor: isDark ? DueColors.textSecondaryDark : DueColors.textSecondary,
-          backgroundColor: isDark ? DueColors.surfaceDark : DueColors.surface,
-          elevation: 0,
-          type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today_rounded),
-              label: 'Upcoming',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.radar_rounded),
-              label: 'Radar',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings_outlined),
-              label: 'Control',
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 }

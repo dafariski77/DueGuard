@@ -1,12 +1,14 @@
-import '../../core/network/api_client.dart';
+import '../../core/network/api_client_interface.dart';
 import '../models/enums.dart';
 import '../models/tracked_item.dart';
+import 'items_repository_interface.dart';
 
-class ItemsRepository {
-  final ApiClient apiClient;
+class ItemsRepository implements IItemsRepository {
+  final IApiClient apiClient;
 
   const ItemsRepository(this.apiClient);
 
+  @override
   Future<List<TrackedItem>> getItems({Category? category, ItemStatus? status}) async {
     final queryParams = <String, dynamic>{};
     if (category != null) queryParams['category'] = category.toBackendString();
@@ -19,25 +21,30 @@ class ItemsRepository {
     return [];
   }
 
+  @override
   Future<TrackedItem> getItemById(String id) async {
     final data = await apiClient.get('/items/$id');
     return TrackedItem.fromJson(data as Map<String, dynamic>);
   }
 
+  @override
   Future<TrackedItem> createItem(TrackedItem item) async {
     final data = await apiClient.post('/items', body: item.toJson());
     return TrackedItem.fromJson(data as Map<String, dynamic>);
   }
 
+  @override
   Future<TrackedItem> updateItem(String id, Map<String, dynamic> patchData) async {
     final data = await apiClient.patch('/items/$id', body: patchData);
     return TrackedItem.fromJson(data as Map<String, dynamic>);
   }
 
+  @override
   Future<void> deleteItem(String id) async {
     await apiClient.delete('/items/$id');
   }
 
+  @override
   Future<TrackedItem> renewItem(String id) async {
     final data = await apiClient.post('/items/$id/renew');
     return TrackedItem.fromJson(data as Map<String, dynamic>);
