@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dueguard/core/utils/renewal_calculator.dart';
 import 'package:dueguard/data/models/enums.dart';
 import 'package:dueguard/data/models/tracked_item.dart';
 import 'package:dueguard/data/models/analytics_summary.dart';
@@ -30,7 +31,22 @@ class MockItemsRepo implements IItemsRepository {
   }
 
   @override
-  Future<TrackedItem> renewItem(String id) async => items.first;
+  Future<TrackedItem> renewItem(String id) async {
+    final item = items.firstWhere((i) => i.id == id);
+    final rolled = TrackedItem(
+      id: item.id,
+      title: item.title,
+      category: item.category,
+      amount: item.amount,
+      billingCycle: item.billingCycle,
+      nextDueDate: RenewalCalculator.calculateNextDueDate(item.billingCycle, item.nextDueDate),
+      reminderDaysBefore: item.reminderDaysBefore,
+      status: item.status,
+    );
+    final idx = items.indexWhere((i) => i.id == id);
+    if (idx != -1) items[idx] = rolled;
+    return rolled;
+  }
 }
 
 class MockAnalyticsRepo implements IAnalyticsRepository {

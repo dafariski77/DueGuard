@@ -22,7 +22,7 @@ export class AttachmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tierPolicy: TierPolicyService = new TierPolicyService(),
-    private readonly storageService: IStorageService = new MockStorageService()
+    private readonly storageService: MockStorageService = new MockStorageService()
   ) {}
 
   private async assertItemOwnership(userId: string, itemId: string) {

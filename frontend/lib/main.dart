@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'core/network/api_client.dart';
 import 'core/theme/due_theme.dart';
 import 'data/models/tracked_item.dart';
+import 'data/repositories/api_config.dart';
+import 'data/repositories/auth_repository.dart';
 import 'data/repositories/items_repository.dart';
 import 'data/repositories/analytics_repository.dart';
 import 'presentation/screens/home_screen.dart';
@@ -15,12 +17,15 @@ import 'presentation/modals/delete_consent_dialog.dart';
 import 'presentation/viewmodels/items_view_model.dart';
 
 void main() {
-  final apiClient = ApiClient(baseUrl: 'http://localhost:3000');
+  final apiClient = ApiClient(baseUrl: ApiConfig.baseUrl);
+  final authRepo = AuthRepository(apiClient);
   final itemsRepo = ItemsRepository(apiClient);
   final analyticsRepo = AnalyticsRepository(apiClient);
+
   final viewModel = ItemsViewModel(
     itemsRepository: itemsRepo,
     analyticsRepository: analyticsRepo,
+    authRepository: authRepo,
   );
 
   runApp(DueGuardApp(viewModel: viewModel));
@@ -63,23 +68,24 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
     if (widget.viewModel != null) {
       _viewModel = widget.viewModel!;
     } else {
-      final apiClient = ApiClient(baseUrl: 'http://localhost:3000');
+      final apiClient = ApiClient(baseUrl: ApiConfig.baseUrl);
       _viewModel = ItemsViewModel(
         itemsRepository: ItemsRepository(apiClient),
         analyticsRepository: AnalyticsRepository(apiClient),
+        authRepository: AuthRepository(apiClient),
       );
     }
 
-    _viewModel.initializeDefaultData();
+    _viewModel.initialize();
   }
 
   void _openQuickAdd() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (ctx) => QuickAddScreen(
-          onSave: (newItem) {
-            _viewModel.addItem(newItem);
-            Navigator.of(ctx).pop();
+          onSave: (newItem) async {
+            if (ctx.mounted) Navigator.of(ctx).pop();
+            await _viewModel.addItem(newItem);
           },
           onCancel: () => Navigator.of(ctx).pop(),
         ),
@@ -96,9 +102,9 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
             Navigator.of(ctx).pop();
             _renewItem(item);
           },
-          onDelete: () {
-            _viewModel.deleteItem(item.id);
-            Navigator.of(ctx).pop();
+          onDelete: () async {
+            if (ctx.mounted) Navigator.of(ctx).pop();
+            await _viewModel.deleteItem(item.id);
           },
         ),
       ),
@@ -153,12 +159,14 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => DeleteConsentDialog(
-        onConfirmDelete: () {
-          _viewModel.clearAll();
-          Navigator.of(ctx).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Account data permanently deleted.')),
-          );
+        onConfirmDelete: () async {
+          if (ctx.mounted) Navigator.of(ctx).pop();
+          await _viewModel.clearAll();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Account data permanently deleted.')),
+            );
+          }
         },
         onCancel: () => Navigator.of(ctx).pop(),
       ),
@@ -189,7 +197,7 @@ class _RootNavigationContainerState extends State<RootNavigationContainer> {
             analytics: _viewModel.analytics!,
           ),
           SettingsScreen(
-            userEmail: 'user@example.com',
+            userEmail: 'demo@dueguard.com',
             isPro: _viewModel.isPro,
             onUpgradePro: _openPaywall,
             onRestorePurchases: _openPaywall,

@@ -5,10 +5,12 @@ import '../../data/models/tracked_item.dart';
 import '../../data/models/analytics_summary.dart';
 import '../../data/repositories/items_repository_interface.dart';
 import '../../data/repositories/analytics_repository_interface.dart';
+import '../../data/repositories/auth_repository_interface.dart';
 
 class ItemsViewModel extends ChangeNotifier {
   final IItemsRepository itemsRepository;
   final IAnalyticsRepository analyticsRepository;
+  final IAuthRepository? authRepository;
 
   List<TrackedItem> _items = [];
   AnalyticsSummary? _analytics;
@@ -19,6 +21,7 @@ class ItemsViewModel extends ChangeNotifier {
   ItemsViewModel({
     required this.itemsRepository,
     required this.analyticsRepository,
+    this.authRepository,
     List<TrackedItem>? initialItems,
     bool isPro = false,
   }) : _items = initialItems != null ? List<TrackedItem>.from(initialItems) : [] {
@@ -32,6 +35,96 @@ class ItemsViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   int get activeItemsCount => _items.where((i) => i.status == ItemStatus.active).length;
   int get maxFreeItems => 7;
+
+  Future<void> initialize() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      if (authRepository != null) {
+        await authRepository!.authenticate();
+      }
+
+      await fetchItems();
+      await fetchAnalytics();
+
+      // If backend has no items yet, seed default items to backend
+      if (_items.isEmpty) {
+        await _seedInitialItemsToBackend();
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      if (_items.isEmpty) {
+        await initializeDefaultData();
+      }
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _seedInitialItemsToBackend() async {
+    final now = DateTime.now();
+    final seeds = [
+      TrackedItem(
+        id: 'seed-1',
+        title: 'Netflix Premium',
+        category: Category.subscription,
+        amount: 186000,
+        billingCycle: BillingCycle.monthly,
+        nextDueDate: now.add(const Duration(days: 2)),
+        reminderDaysBefore: const [7, 3, 1],
+      ),
+      TrackedItem(
+        id: 'seed-2',
+        title: 'Spotify Family',
+        category: Category.subscription,
+        amount: 86900,
+        billingCycle: BillingCycle.monthly,
+        nextDueDate: now.add(const Duration(days: 9)),
+        reminderDaysBefore: const [7, 3, 1],
+      ),
+      TrackedItem(
+        id: 'seed-3',
+        title: 'STNK 5-Year Renewal',
+        category: Category.billId,
+        amount: 3500000,
+        billingCycle: BillingCycle.yearly,
+        nextDueDate: now.add(const Duration(days: 42)),
+        reminderDaysBefore: const [30, 14, 7, 3, 1],
+      ),
+      TrackedItem(
+        id: 'seed-4',
+        title: 'MacBook Pro Warranty (AppleCare+)',
+        category: Category.warranty,
+        amount: 3899000,
+        billingCycle: BillingCycle.oneTime,
+        nextDueDate: now.add(const Duration(days: 85)),
+        reminderDaysBefore: const [30, 14, 7],
+      ),
+      TrackedItem(
+        id: 'seed-5',
+        title: 'BPJS Kesehatan Mandiri',
+        category: Category.billId,
+        amount: 150000,
+        billingCycle: BillingCycle.monthly,
+        nextDueDate: now.add(const Duration(days: 12)),
+        reminderDaysBefore: const [7, 3, 1],
+      ),
+    ];
+
+    for (final seed in seeds) {
+      try {
+        final created = await itemsRepository.createItem(seed);
+        _items.add(created);
+      } catch (_) {
+        _items.add(seed);
+      }
+    }
+
+    await fetchAnalytics();
+    notifyListeners();
+  }
 
   Future<void> initializeDefaultData() async {
     if (_items.isNotEmpty) return;
@@ -108,14 +201,8 @@ class ItemsViewModel extends ChangeNotifier {
       final remoteItems = await itemsRepository.getItems();
       if (remoteItems.isNotEmpty) {
         _items = remoteItems;
-      } else if (_items.isEmpty) {
-        await initializeDefaultData();
       }
     } catch (e) {
-      // Graceful fallback to offline/seeded items
-      if (_items.isEmpty) {
-        await initializeDefaultData();
-      }
       _errorMessage = e.toString();
     } finally {
       _isLoading = false;
@@ -134,21 +221,20 @@ class ItemsViewModel extends ChangeNotifier {
   }
 
   Future<void> addItem(TrackedItem item) async {
-    _items.add(item);
-    notifyListeners();
-
     try {
-      await itemsRepository.createItem(item);
+      final created = await itemsRepository.createItem(item);
+      _items.add(created);
     } catch (_) {
-      // Kept in local state if offline
+      _items.add(item);
     }
+    await fetchAnalytics();
+    notifyListeners();
   }
 
   Future<TrackedItem> renewItem(TrackedItem item) async {
     final nextDate = RenewalCalculator.calculateNextDueDate(item.billingCycle, item.nextDueDate);
     final status = item.billingCycle == BillingCycle.oneTime ? ItemStatus.archived : ItemStatus.active;
-
-    final updated = TrackedItem(
+    TrackedItem updated = TrackedItem(
       id: item.id,
       title: item.title,
       category: item.category,
@@ -162,18 +248,22 @@ class ItemsViewModel extends ChangeNotifier {
       attachments: item.attachments,
     );
 
+    try {
+      final remoteUpdated = await itemsRepository.renewItem(item.id);
+      if (remoteUpdated.nextDueDate != item.nextDueDate) {
+        updated = remoteUpdated;
+      }
+    } catch (_) {
+      // Kept local calculation
+    }
+
     final idx = _items.indexWhere((i) => i.id == item.id);
     if (idx != -1) {
       _items[idx] = updated;
-      notifyListeners();
     }
 
-    try {
-      await itemsRepository.renewItem(item.id);
-    } catch (_) {
-      // Kept locally
-    }
-
+    await fetchAnalytics();
+    notifyListeners();
     return updated;
   }
 
@@ -192,8 +282,9 @@ class ItemsViewModel extends ChangeNotifier {
     try {
       await itemsRepository.deleteItem(id);
     } catch (_) {
-      // Kept locally
+      // Kept locally if offline
     }
+    await fetchAnalytics();
   }
 
   void setPro(bool isPro) {
@@ -201,7 +292,13 @@ class ItemsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearAll() {
+  Future<void> clearAll() async {
+    try {
+      if (authRepository != null) {
+        await authRepository!.deleteAccount();
+      }
+    } catch (_) {}
+
     _items.clear();
     _analytics = null;
     notifyListeners();

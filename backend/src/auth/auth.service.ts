@@ -18,7 +18,7 @@ export interface JwtPayload {
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly socialVerifier: ISocialAuthVerifier = new SocialAuthVerifierService()
+    private readonly socialVerifier: SocialAuthVerifierService = new SocialAuthVerifierService()
   ) {}
 
   async hashPassword(password: string): Promise<string> {
