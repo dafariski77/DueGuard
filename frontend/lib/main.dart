@@ -1,121 +1,350 @@
 import 'package:flutter/material.dart';
+import 'core/theme/due_theme.dart';
+import 'data/models/enums.dart';
+import 'data/models/tracked_item.dart';
+import 'data/models/analytics_summary.dart';
+import 'presentation/screens/home_screen.dart';
+import 'presentation/screens/quick_add_screen.dart';
+import 'presentation/screens/detail_screen.dart';
+import 'presentation/screens/spend_radar_screen.dart';
+import 'presentation/screens/settings_screen.dart';
+import 'presentation/modals/paywall_modal.dart';
+import 'presentation/modals/renewal_affirmation_sheet.dart';
+import 'presentation/modals/delete_consent_dialog.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const DueGuardApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class DueGuardApp extends StatelessWidget {
+  const DueGuardApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'DueGuard',
+      debugShowCheckedModeBanner: false,
+      theme: DueTheme.lightTheme,
+      darkTheme: DueTheme.darkTheme,
+      themeMode: ThemeMode.system,
+      home: const RootNavigationContainer(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class RootNavigationContainer extends StatefulWidget {
+  const RootNavigationContainer({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<RootNavigationContainer> createState() => _RootNavigationContainerState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _RootNavigationContainerState extends State<RootNavigationContainer> {
+  int _currentIndex = 0;
+  bool _isPro = false;
 
-  void _incrementCounter() {
+  late List<TrackedItem> _items;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _items = [
+      TrackedItem(
+        id: 'item-1',
+        title: 'Netflix Premium',
+        category: Category.subscription,
+        amount: 186000,
+        billingCycle: BillingCycle.monthly,
+        nextDueDate: now.add(const Duration(days: 2)),
+        reminderDaysBefore: [7, 3, 1],
+        status: ItemStatus.active,
+        attachments: const [
+          AttachmentItem(
+            id: 'att-1',
+            fileName: 'netflix_invoice_march.pdf',
+            viewUrl: 'https://storage.dueguard.com/invoice.pdf',
+            mimeType: 'application/pdf',
+          ),
+        ],
+      ),
+      TrackedItem(
+        id: 'item-2',
+        title: 'Spotify Family',
+        category: Category.subscription,
+        amount: 86900,
+        billingCycle: BillingCycle.monthly,
+        nextDueDate: now.add(const Duration(days: 9)),
+        reminderDaysBefore: [7, 3, 1],
+        status: ItemStatus.active,
+      ),
+      TrackedItem(
+        id: 'item-3',
+        title: 'STNK 5-Year Renewal',
+        category: Category.billId,
+        amount: 3500000,
+        billingCycle: BillingCycle.yearly,
+        nextDueDate: now.add(const Duration(days: 42)),
+        reminderDaysBefore: [30, 14, 7, 3, 1],
+        status: ItemStatus.active,
+      ),
+      TrackedItem(
+        id: 'item-4',
+        title: 'MacBook Pro Warranty (AppleCare+)',
+        category: Category.warranty,
+        amount: 3899000,
+        billingCycle: BillingCycle.oneTime,
+        nextDueDate: now.add(const Duration(days: 85)),
+        reminderDaysBefore: [30, 14, 7],
+        status: ItemStatus.active,
+      ),
+      TrackedItem(
+        id: 'item-5',
+        title: 'BPJS Kesehatan Mandiri',
+        category: Category.billId,
+        amount: 150000,
+        billingCycle: BillingCycle.monthly,
+        nextDueDate: now.add(const Duration(days: 12)),
+        reminderDaysBefore: [7, 3, 1],
+        status: ItemStatus.active,
+      ),
+    ];
+  }
+
+  AnalyticsSummary get _analytics {
+    double monthly = 0;
+    for (final item in _items) {
+      if (item.amount == null) continue;
+      switch (item.billingCycle) {
+        case BillingCycle.monthly:
+          monthly += item.amount!;
+          break;
+        case BillingCycle.yearly:
+          monthly += item.amount! / 12.0;
+          break;
+        case BillingCycle.quarterly:
+          monthly += item.amount! / 3.0;
+          break;
+        case BillingCycle.oneTime:
+          break;
+      }
+    }
+
+    return AnalyticsSummary(
+      estMonthlySpend: monthly,
+      annualizedSpend: monthly * 12.0,
+      dueThisMonth: monthly,
+      upcoming90DaysSpikes: [
+        CashSpike(
+          month: 'April 2026',
+          amount: 3500000,
+          diffFromAverage: 3200000,
+          reasons: ['STNK 5-Year Renewal'],
+        ),
+      ],
+      categoryBreakdown: const CategoryBreakdown(
+        subscriptionPercentage: 62,
+        warrantyPercentage: 15,
+        billIdPercentage: 23,
+      ),
+    );
+  }
+
+  void _openQuickAdd() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => QuickAddScreen(
+          onSave: (newItem) {
+            setState(() {
+              _items.add(newItem);
+            });
+            Navigator.of(ctx).pop();
+          },
+          onCancel: () => Navigator.of(ctx).pop(),
+        ),
+      ),
+    );
+  }
+
+  void _openDetail(TrackedItem item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => DetailScreen(
+          item: item,
+          onRenew: () {
+            Navigator.of(ctx).pop();
+            _renewItem(item);
+          },
+          onDelete: () {
+            setState(() {
+              _items.removeWhere((i) => i.id == item.id);
+            });
+            Navigator.of(ctx).pop();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _renewItem(TrackedItem item) {
+    DateTime nextDate;
+    switch (item.billingCycle) {
+      case BillingCycle.monthly:
+        nextDate = DateTime(item.nextDueDate.year, item.nextDueDate.month + 1, item.nextDueDate.day);
+        break;
+      case BillingCycle.yearly:
+        nextDate = DateTime(item.nextDueDate.year + 1, item.nextDueDate.month, item.nextDueDate.day);
+        break;
+      case BillingCycle.quarterly:
+        nextDate = DateTime(item.nextDueDate.year, item.nextDueDate.month + 3, item.nextDueDate.day);
+        break;
+      case BillingCycle.oneTime:
+        nextDate = item.nextDueDate;
+        break;
+    }
+
+    final oldIndex = _items.indexWhere((i) => i.id == item.id);
+    final updated = TrackedItem(
+      id: item.id,
+      title: item.title,
+      category: item.category,
+      amount: item.amount,
+      billingCycle: item.billingCycle,
+      nextDueDate: nextDate,
+      reminderDaysBefore: item.reminderDaysBefore,
+      notes: item.notes,
+      templateKey: item.templateKey,
+      status: item.status,
+      attachments: item.attachments,
+    );
+
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      if (oldIndex != -1) {
+        _items[oldIndex] = updated;
+      }
     });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => RenewalAffirmationSheet(
+        itemTitle: item.title,
+        newDueDate: nextDate,
+        onUndo: () {
+          setState(() {
+            if (oldIndex != -1) {
+              _items[oldIndex] = item;
+            }
+          });
+          Navigator.of(sheetCtx).pop();
+        },
+        onDismiss: () => Navigator.of(sheetCtx).pop(),
+      ),
+    );
+  }
+
+  void _openPaywall() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => PaywallModal(
+          onSubscribe: (plan) {
+            setState(() => _isPro = true);
+            Navigator.of(ctx).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Welcome to DueGuard Pro!')),
+            );
+          },
+          onRestore: () {
+            Navigator.of(ctx).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Purchases restored.')),
+            );
+          },
+          onClose: () => Navigator.of(ctx).pop(),
+        ),
+      ),
+    );
+  }
+
+  void _openDeleteConsent() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DeleteConsentDialog(
+        onConfirmDelete: () {
+          setState(() {
+            _items.clear();
+          });
+          Navigator.of(ctx).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Account data permanently deleted.')),
+          );
+        },
+        onCancel: () => Navigator.of(ctx).pop(),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final screens = [
+      HomeScreen(
+        items: _items,
+        analytics: _analytics,
+        activeItemsCount: _items.length,
+        maxFreeItems: 7,
+        onAddItem: _openQuickAdd,
+        onTapItem: _openDetail,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      SpendRadarScreen(
+        analytics: _analytics,
+      ),
+      SettingsScreen(
+        userEmail: 'user@example.com',
+        isPro: _isPro,
+        onUpgradePro: _openPaywall,
+        onRestorePurchases: _openPaywall,
+        onDeleteAccount: _openDeleteConsent,
+      ),
+    ];
+
+    return Scaffold(
+      body: screens[_currentIndex],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: isDark ? DueColors.borderSubtleDark : DueColors.borderSubtle,
+              width: 0.5,
+            ),
+          ),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
+          selectedItemColor: isDark ? DueColors.primaryDark : DueColors.primary,
+          unselectedItemColor: isDark ? DueColors.textSecondaryDark : DueColors.textSecondary,
+          backgroundColor: isDark ? DueColors.surfaceDark : DueColors.surface,
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today_rounded),
+              label: 'Upcoming',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.radar_rounded),
+              label: 'Radar',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_outlined),
+              label: 'Control',
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
