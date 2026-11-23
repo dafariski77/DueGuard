@@ -30,7 +30,7 @@ class BentoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     Color defaultBg;
     switch (variant) {
       case BentoVariant.hero:
@@ -44,34 +44,29 @@ class BentoCard extends StatelessWidget {
         defaultBg = isDark ? DueColors.surfaceDark : DueColors.surface;
     }
 
-    final cardBorder = border ??
-        Border.all(
-          color: isDark ? DueColors.borderSubtleDark : DueColors.borderSubtle,
-          width: 1.0,
-        );
+    final borderColor = isDark ? DueColors.borderSubtleDark : DueColors.borderSubtle;
+    final side = BorderSide(color: borderColor, width: 1.0);
 
-    Widget content = Container(
+    Widget inner = Padding(
       padding: padding ?? const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: backgroundColor ?? defaultBg,
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: cardBorder,
-      ),
       child: child,
     );
 
     if (onTap != null) {
-      return Material(
-        color: Colors.transparent,
+      inner = InkWell(
         borderRadius: BorderRadius.circular(borderRadius),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(borderRadius),
-          onTap: onTap,
-          child: content,
-        ),
+        onTap: onTap,
+        child: inner,
       );
     }
 
-    return content;
+    return Material(
+      color: backgroundColor ?? defaultBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+        side: side,
+      ),
+      child: inner,
+    );
   }
 }
