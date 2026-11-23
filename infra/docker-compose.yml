@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dueguard-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dueguard_user
+      POSTGRES_PASSWORD: dueguard_secret_password
+      POSTGRES_DB: dueguard_prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dueguard-internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: dueguard-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - dueguard-internal
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: dueguard-api
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://dueguard_user:dueguard_secret_password@postgres:5432/dueguard_prod?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: super_secure_jwt_secret_change_in_prod
+    networks:
+      - dueguard-internal
+    ports:
+      - "127.0.0.1:3000:3000"
+
+networks:
+  dueguard-internal:
+    driver: bridge
+    internal: false
+
+volumes:
+  postgres_data:
+  redis_data:

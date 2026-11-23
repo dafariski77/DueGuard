@@ -1,0 +1,92 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Category {
+  SUBSCRIPTION
+  WARRANTY
+  BILL_ID
+}
+
+enum BillingCycle {
+  ONE_TIME
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum ItemStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model User {
+  id                   String        @id @default(cuid())
+  email                String        @unique
+  passwordHash         String?
+  authProvider         String        @default("email") // "google" | "apple" | "email"
+  currencyCode         String        @default("IDR")
+  timezone             String        @default("Asia/Jakarta")
+  expoPushToken        String?
+  isPro                Boolean       @default(false)
+  revenueCatCustomerId String?       @unique
+  createdAt            DateTime      @default(now())
+  deletedAt            DateTime?
+
+  items                TrackedItem[]
+
+  @@map("users")
+}
+
+model TrackedItem {
+  id                 String        @id @default(cuid())
+  userId             String
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title              String
+  category           Category
+  templateKey        String?       // e.g., "netflix", "stnk", "sim"
+  amount             Decimal?      @db.Decimal(12, 2)
+  billingCycle       BillingCycle  @default(MONTHLY)
+  nextDueDate        DateTime
+  reminderDaysBefore Int[]         @default([7, 1])
+  notes              String?
+  cancelUrl          String?
+  status             ItemStatus    @default(ACTIVE)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  attachments        Attachment[]
+  notifications      NotificationLog[]
+
+  @@index([userId, status, nextDueDate])
+  @@map("tracked_items")
+}
+
+model Attachment {
+  id         String      @id @default(cuid())
+  itemId     String
+  item       TrackedItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  storageKey String
+  mimeType   String
+  uploadedAt DateTime    @default(now())
+
+  @@map("attachments")
+}
+
+model NotificationLog {
+  id           String      @id @default(cuid())
+  itemId       String
+  item         TrackedItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  daysBefore   Int
+  scheduledFor DateTime
+  sentAt       DateTime?
+  status       String      @default("PENDING") // "PENDING" | "SENT" | "FAILED"
+
+  @@unique([itemId, scheduledFor, daysBefore])
+  @@map("notification_logs")
+}
