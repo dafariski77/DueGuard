@@ -40,8 +40,8 @@ class BentoCard extends StatelessWidget {
         defaultBg = isDark ? DueColors.primarySoftDark : DueColors.primarySoft;
         break;
       case BentoVariant.standard:
-      default:
         defaultBg = isDark ? DueColors.surfaceDark : DueColors.surface;
+        break;
     }
 
     final borderColor = isDark ? DueColors.borderSubtleDark : DueColors.borderSubtle;

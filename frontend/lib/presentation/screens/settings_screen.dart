@@ -123,7 +123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   value: _biometricEnabled,
-                  activeColor: DueColors.primary,
+                  activeTrackColor: DueColors.primary,
                   onChanged: (val) {
                     setState(() => _biometricEnabled = val);
                     widget.onToggleBiometric?.call(val);
@@ -144,7 +144,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   value: _notificationsEnabled,
-                  activeColor: DueColors.primary,
+                  activeTrackColor: DueColors.primary,
                   onChanged: (val) {
                     setState(() => _notificationsEnabled = val);
                     widget.onToggleNotifications?.call(val);

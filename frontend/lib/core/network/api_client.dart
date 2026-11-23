@@ -27,7 +27,7 @@ class ApiClient {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       if (authToken != null) 'Authorization': 'Bearer $authToken',
-      if (extra != null) ...extra,
+      ...?extra,
     };
   }
 

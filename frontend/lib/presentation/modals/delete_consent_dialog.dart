@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/due_theme.dart';
-import '../widgets/bento_card.dart';
 import '../widgets/due_button.dart';
 
 class DeleteConsentDialog extends StatelessWidget {

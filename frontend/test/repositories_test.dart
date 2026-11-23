@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:dueguard/core/network/api_client.dart';
 import 'package:dueguard/data/models/enums.dart';
-import 'package:dueguard/data/models/tracked_item.dart';
 import 'package:dueguard/data/repositories/items_repository.dart';
 import 'package:dueguard/data/repositories/analytics_repository.dart';
 

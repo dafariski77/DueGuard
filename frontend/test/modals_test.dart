@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:dueguard/data/models/enums.dart';
 import 'package:dueguard/data/models/tracked_item.dart';
 import 'package:dueguard/presentation/modals/paywall_modal.dart';
 import 'package:dueguard/presentation/modals/proof_vault_viewer.dart';
